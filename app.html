@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Budget Tracker (Latvia 2026)</title>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--tx:#1b1f24;--mu:#6b7480;--ac:#2563eb;--bd:#e1e4e8;--ok:#16a34a;--bad:#dc2626}
+@media(prefers-color-scheme:dark){:root{--bg:#111418;--card:#1a1f26;--tx:#e8eaed;--mu:#97a0ab;--ac:#5b8def;--bd:#2c333c;--ok:#4ade80;--bad:#f87171}}
+*{box-sizing:border-box}body{margin:0;font:15px system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+.top{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;gap:8px;flex-wrap:wrap;max-width:1100px;margin:auto}
+h1{font-size:18px;margin:0}.wrap{max-width:1100px;margin:auto;padding:0 14px 30px;display:grid;gap:12px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.tile{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px}.tile b{font-size:22px;display:block}
+details.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:0}
+details.card>summary{cursor:pointer;padding:12px 14px;font-weight:600;list-style:none}details.card>summary::before{content:"+ ";color:var(--mu)}details[open]>summary::before{content:"- "}
+.in{padding:0 14px 14px}
+label{display:block;font-size:12px;color:var(--mu);margin:8px 0 2px}
+input,select,button{font:inherit;padding:7px 9px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);width:100%}
+button{cursor:pointer;background:var(--ac);color:#fff;border:0;width:auto}button.g{background:var(--bg);color:var(--tx);border:1px solid var(--bd)}
+.row{display:flex;gap:8px;align-items:end}.row>*{flex:1}.row>button{flex:0 0 auto}
+.mu{color:var(--mu);font-size:12.5px}.ok{color:var(--ok)}.bad{color:var(--bad)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}td,th{padding:5px 4px;border-bottom:1px solid var(--bd);text-align:left}td.r,th.r{text-align:right}
+.bt td,.bt th{padding:3px 4px}.bt td:first-child{width:22px;color:var(--mu)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}.cal>div{min-height:54px;border:1px solid var(--bd);border-radius:6px;padding:3px;font-size:11px;cursor:pointer}
+.cal .h{min-height:0;border:0;text-align:center;color:var(--mu);cursor:default}.cal .sel{outline:2px solid var(--ac)}.cal .td{border-color:var(--ac)}.cal .pay{background:rgba(37,99,235,.12)}
+.cal b{display:block;font-size:12px}.cal .sp{color:var(--mu)}
+.x{background:none;color:var(--bad);border:0;padding:0 6px}
+.chip{display:inline-flex;gap:4px;align-items:center;border:1px solid var(--bd);border-radius:14px;padding:2px 8px;margin:2px;font-size:12.5px}.chip input{width:auto;padding:0}
+.warn{background:rgba(220,38,38,.1);color:var(--bad);border-radius:8px;padding:8px;font-size:13px}
+</style></head><body>
+<div class="top"><h1>Budget Tracker</h1>
+<div class="row" style="flex:0 1 auto"><span class="mu" id="saved"></span>
+<button class="g" onclick="exp()">Export</button><button class="g" onclick="document.getElementById('imp').click()">Import</button>
+<input type="file" id="imp" accept=".json" hidden></div></div>
+<div class="wrap">
+<div id="warn"></div>
+<div class="tiles">
+<div class="tile"><span class="mu">Allowance today</span><b id="t1"></b></div>
+<div class="tile"><span class="mu">Left today</span><b id="t2"></b></div>
+<div class="tile"><span class="mu">Net salary</span><b id="t3"></b></div>
+<div class="tile"><span class="mu">Goal reached</span><b id="t4" style="font-size:16px"></b></div></div>
+
+<details class="card" id="d1"><summary>Income and tax</summary><div class="in">
+<div class="row"><div><label>Gross monthly income (EUR)</label><input type="number" id="gross" step="any"></div>
+<div><label>Payday (day of month)</label><input type="number" id="pd" min="1" max="31"></div></div>
+<div class="row"><div><label>VSAOI employee %</label><input type="number" id="vsaoi" step="any"></div>
+<div><label>Non-taxable minimum (EUR/month)</label><input type="number" id="nm" step="any"></div></div>
+<label>Tax brackets on monthly taxable income (empty rate = unused). 2026: 25.5% up to 8 775, then 33%.</label>
+<table class="bt" id="br"></table>
+<table id="tx" style="margin-top:10px"></table></div></details>
+
+<details class="card" open><summary>Daily budget</summary><div class="in">
+<div class="row"><div><label>Save this pay period (EUR)</label><input type="number" id="st" step="any"></div>
+<div><label>Or: daily budget goal (EUR)</label><input type="number" id="dg" step="any"></div></div>
+<div id="db" class="mu" style="margin-top:10px"></div></div></details>
+
+<details class="card" open><summary>Log expense and calendar</summary><div class="in">
+<div class="row"><div><label>Date</label><input type="date" id="ed"></div><div><label>Amount</label><input type="number" id="ea" step="0.01"></div>
+<div><label>Category</label><select id="ec"></select></div><div><label>Note</label><input id="en"></div><button onclick="addE()">Add</button></div>
+<div class="row" style="margin-top:12px;align-items:center"><span class="mu" style="flex:1">Today and future days show the allowance, past days show what you spent. Blue = payday.</span>
+<button class="g" onclick="mv(-1)">&lt;</button><b id="cm" style="flex:0 0 120px;text-align:center"></b><button class="g" onclick="mv(1)">&gt;</button></div>
+<div class="cal" id="cal" style="margin-top:8px"></div>
+<h3 style="font-size:14px;margin:14px 0 4px" id="dl"></h3><table id="dt"></table>
+<details style="margin-top:12px"><summary class="mu" style="cursor:pointer">Categories (tick = fixed bill such as rent: taken off your pool once, not off a day)</summary>
+<div id="chips" style="margin-top:6px"></div><div class="row"><div><input id="nc" placeholder="New category"></div><button class="g" onclick="addC()">Add</button></div></details>
+</div></details>
+
+<details class="card" open><summary>Savings goal</summary><div class="in">
+<div class="row"><div><label>Goal (EUR)</label><input type="number" id="goal"></div><div><label>Starting balance</label><input type="number" id="sv" step="any"></div>
+<div><label>Months sooner (-) / later (+)</label><input type="number" id="sh" step="1"></div></div>
+<div id="gl" style="margin-top:10px"></div>
+<h3 style="font-size:14px;margin:14px 0 0">Current savings: <span id="cs"></span></h3>
+<div class="row"><div><label>Amount</label><input type="number" id="aa" step="any"></div><div><label>Reason</label><input id="ar"></div>
+<button onclick="adj(1)">Deposit</button><button class="g" onclick="adj(-1)">Withdraw</button></div>
+<table id="at"></table></div></details>
+
+<details class="card"><summary>Bank import (SEB)</summary><div class="in">
+<div class="mu">Option A: export transactions from SEB internet bank as CSV and load the file here. Only outgoing payments (negative amounts) become expenses. Duplicates are skipped, so re-importing an overlapping file is safe.</div>
+<div class="row"><div><label>CSV file</label><input type="file" id="cf" accept=".csv,.txt"></div></div>
+<div class="row" id="cmap" style="display:none"><div><label>Date column</label><select id="c1"></select></div><div><label>Amount column</label><select id="c2"></select></div><div><label>Details column</label><select id="c3"></select></div><div><label>D/K column</label><select id="c4"></select></div><button onclick="impCSV()">Import</button></div>
+<div class="mu" style="margin-top:14px"><b>Option B: direct bank sync (Enable Banking).</b> Setup steps are in the README. The key is stored only on this phone and is not part of Export backups.</div>
+<label>Application ID</label><input id="eba" autocomplete="off">
+<label>Redirect URL (exactly as registered)</label><input id="ebr" placeholder="https://example.com/redirect" autocomplete="off">
+<label>Private key (full contents of the .pem file)</label><textarea id="ebk" rows="4" autocomplete="off" style="width:100%;font:12px monospace;padding:7px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx)"></textarea>
+<div class="row" style="margin-top:6px"><button onclick="ebConnect()">1. Connect SEB</button></div>
+<label>2. Paste the full web address you landed on after approving</label>
+<div class="row"><div><input id="ebu" autocomplete="off"></div><button onclick="ebFinish()">Finish</button></div>
+<div class="row" style="margin-top:10px"><div><label>Auto sync every (min, 360 minimum)</label><input type="number" id="bi" min="360"></div><div style="flex:0 0 auto"><label>Auto</label><input type="checkbox" id="ba" style="width:auto"></div><button onclick="syncNow(true)">Sync now</button></div>
+<div id="ebs" class="mu" style="margin-top:8px"></div>
+<label>Category rules (one per line: keyword, keyword=Category; anything else becomes Extras)</label><textarea id="rules" rows="5" style="width:100%;font:inherit;padding:7px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx)"></textarea>
+<div id="bst" class="mu" style="margin-top:8px"></div></div></details>
+
+<details class="card" open><summary>Graphs</summary><div class="in">
+<div class="row"><div><label>Money speed: range</label><select id="gr" onchange="render()"><option value="cur">This pay period</option><option value="3">Last 3 pay periods</option><option value="all">Everything</option></select></div></div>
+<div id="g1" style="margin-top:8px"></div>
+<div class="row" style="margin-top:18px"><div><label>Spending vs limit</label><select id="gm" onchange="render()"><option value="m">Monthly (this pay period)</option><option value="y">Yearly</option></select></div>
+<span id="gyc" style="flex:0 0 auto;display:none"><button class="g" onclick="gy--;render()">&lt;</button> <b id="gyl"></b> <button class="g" onclick="gy++;render()">&gt;</button></span></div>
+<div id="g2" style="margin-top:8px"></div></div></details>
+
+<details class="card"><summary>Forecast</summary><div class="in" id="fc"></div></details>
+</div>
+<script>
+const KEY='budgetTracker.v1',$=id=>document.getElementById(id);
+const D={gross:0,vsaoi:10.5,nm:550,pd:15,br:[{up:8775,r:25.5},{up:'',r:33},{up:'',r:''},{up:'',r:''}],goal:20000,sv:0,st:0,dg:0,sh:0,
+cats:['Rent','Food','Bars','Transport','Bills','Extras'],fixed:['Rent','Bills'],ex:[],ad:[],ls:0,bi:360,ba:false,rules:'rimi,maxima,lidl,barbora,mego=Food\nbolt,citybee,circle k,viada,neste,mikrotaxi=Transport\nbar,pub,club,alus,cocktail=Bars\nrent,īre,noma=Rent\nlmt,tele2,elektr,gaze,ūdens=Bills'};
+let S=load(),vm=new Date();vm.setDate(1);vm.setHours(0,0,0,0);let sel=iso(new Date());
+function load(){let s=JSON.parse(JSON.stringify(D));try{const r=JSON.parse(localStorage.getItem(KEY));if(r)s=Object.assign(s,r)}catch(e){}
+ if(!Array.isArray(s.br)||s.br.length!==4)s.br=JSON.parse(JSON.stringify(D.br));return s}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S));$('saved').textContent='Saved '+new Date().toLocaleTimeString()}catch(e){$('saved').textContent='Save failed (storage blocked)'}}
+function iso(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+const pdt=s=>new Date(s+'T00:00:00'),num=v=>parseFloat(v)||0;
+const f=n=>(isFinite(n)?n:0).toLocaleString('lv-LV',{minimumFractionDigits:2,maximumFractionDigits:2})+' EUR';
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const isFixed=c=>S.fixed.includes(c),fdate=d=>d.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+function net(){const g=num(S.gross),v=g*num(S.vsaoi)/100,t=Math.max(0,g-v-num(S.nm));let tax=0,p=0;const rows=[];
+ for(const b of S.br){if(b.r===''||b.r===null)continue;const cap=b.up===''?Infinity:num(b.up);if(cap<=p)continue;const a=Math.min(t,cap)-p;if(a>0){const x=a*num(b.r)/100;tax+=x;rows.push([b.r,a,x])}p=cap;if(t<=cap)break}
+ return{g,v,t,tax,rows,n:g-v-tax}}
+function payIn(y,m){const pd=Math.min(31,Math.max(1,Math.round(num(S.pd))||15));return new Date(y,m,Math.min(pd,new Date(y,m+1,0).getDate()))}
+function pStart(d){const c=payIn(d.getFullYear(),d.getMonth());return d>=c?c:payIn(d.getFullYear(),d.getMonth()-1)}
+function pNext(st){return payIn(st.getFullYear(),st.getMonth()+1)}
+// One allowance for the whole rest of the period: what is left of net salary after
+// the saving target, all fixed bills, and variable spending before today, split over the days left.
+function bud(){const N=net().n,now=new Date();now.setHours(0,0,0,0);const st=pStart(now),end=pNext(st),kS=iso(st),kE=iso(end),tk=iso(now);
+ const n=Math.round((end-st)/864e5),left=Math.round((end-now)/864e5);let fixed=0,before=0,today=0,all=0;
+ S.ex.forEach(e=>{if(e.d<kS||e.d>=kE)return;all+=e.a;if(isFixed(e.c))fixed+=e.a;else if(e.d<tk)before+=e.a;else if(e.d===tk)today+=e.a});
+ const pool=N-num(S.st)-fixed-before;return{N,now,st,end,kS,kE,tk,n,left,fixed,before,today,all,pool,allow:pool/left}}
+function periods(){const m={};S.ex.forEach(e=>{const k=iso(pStart(pdt(e.d)));const o=m[k]=m[k]||{t:0,c:{}};o.t+=e.a;o.c[e.c]=(o.c[e.c]||0)+e.a});return m}
+function hist(){const cur=iso(pStart(new Date())),m=periods(),ks=Object.keys(m).filter(k=>k<cur);return{n:ks.length,m,ks}}
+function curSav(){return num(S.sv)+S.ad.reduce((s,a)=>s+a.a,0)}
+
+function render(){
+ const N=net(),B=bud();
+ $('tx').innerHTML=`<tr><td>Gross</td><td class=r>${f(N.g)}</td></tr><tr><td>VSAOI</td><td class=r>-${f(N.v)}</td></tr><tr><td>Taxable (after minimum)</td><td class=r>${f(N.t)}</td></tr>`+
+ N.rows.map(r=>`<tr><td>Tax ${r[0]}% on ${f(r[1])}</td><td class=r>-${f(r[2])}</td></tr>`).join('')+`<tr><th>Net income</th><th class=r>${f(N.n)}</th></tr>`;
+ let p=0;S.br.forEach((b,i)=>{const e=$('bf'+i);if(e)e.textContent=f(p).replace(' EUR','');p=b.up===''?p:num(b.up)});
+ $('ec').innerHTML=S.cats.map(c=>`<option>${esc(c)}</option>`).join('');
+ $('chips').innerHTML=S.cats.map((c,i)=>`<span class=chip><input type=checkbox ${isFixed(c)?'checked':''} onchange="tf(${i})">${esc(c)}</span>`).join('');
+ $('dl').textContent='Expenses on '+sel;
+ $('dt').innerHTML=S.ex.filter(e=>e.d===sel).map(e=>`<tr><td>${esc(e.c)}</td><td>${esc(e.n)}</td><td class=r>${f(e.a)}</td><td><button class=x onclick="delE(${e.id})">x</button></td></tr>`).join('')||'<tr><td class=mu>Nothing logged</td></tr>';
+ // calendar
+ const y=vm.getFullYear(),mo=vm.getMonth(),dim=new Date(y,mo+1,0).getDate(),first=(vm.getDay()+6)%7;
+ $('cm').textContent=vm.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+ let h=['Mo','Tu','We','Th','Fr','Sa','Su'].map(x=>`<div class=h>${x}</div>`).join('')+'<div class=h></div>'.repeat(first);
+ for(let i=1;i<=dim;i++){const k=iso(new Date(y,mo,i)),spent=S.ex.filter(e=>e.d===k).reduce((a,e)=>a+e.a,0);
+  const inCur=k>=B.kS&&k<B.kE,showAllow=inCur&&k>=B.tk,pay=k===iso(pStart(pdt(k)));
+  h+=`<div class="${k===sel?'sel ':''}${k===B.tk?'td ':''}${pay?'pay':''}" onclick="pick('${k}')">${i}${pay?' &#128176;':''}`+
+  (showAllow?`<b class="${B.allow<0?'bad':'ok'}">${B.allow.toFixed(0)}</b>`:'')+(spent?`<span class=sp>${showAllow?'spent ':''}-${spent.toFixed(0)}</span>`:'')+'</div>'}
+ $('cal').innerHTML=h;
+ // daily budget
+ const dg=num(S.dg),H=hist(),sv=num(S.st);
+ const futureSave=H.n?H.ks.reduce((s,k)=>s+(N.n-H.m[k].t),0)/H.n:sv,rem=num(S.goal)-curSav();
+ let db=`Period ${fdate(B.st)} to ${fdate(new Date(B.end.getTime()-864e5))}, ${B.left} days left including today. Next payday ${fdate(B.end)}.<br>
+ Net salary ${f(B.N)}, saving target ${f(sv)}, fixed bills ${f(B.fixed)}, variable spent before today ${f(B.before)}, so ${f(B.pool)} is left to spend over ${B.left} days.`;
+ if(dg){const proj=B.N-(B.all-B.today+Math.max(B.today,dg)+dg*(B.left-1));
+  db+=`<br><b>With a daily goal of ${f(dg)}: you would save about <span class="${proj<0?'bad':'ok'}">${f(proj)}</span> this period.</b>`}
+ $('db').innerHTML=db;
+ $('t1').textContent=f(B.allow);$('t1').className=B.allow<0?'bad':'';
+ const left=B.allow-B.today;$('t2').textContent=f(left);$('t2').className=left<0?'bad':'ok';$('t3').textContent=f(N.n);
+ $('warn').innerHTML=N.n<=0?'<div class=warn>Net income is 0. Open "Income and tax" and enter your gross income, otherwise every allowance is negative.</div>':'';
+ // goal
+ let g='',per=Infinity;
+ if(rem<=0){g='<b class=ok>Goal reached</b>';$('t4').textContent='Done'}
+ else{per=rem<=sv?(sv>0?rem/sv:Infinity):(futureSave>0?1+(rem-sv)/futureSave:Infinity);
+  const when=isFinite(per)?fdate(new Date(B.end.getTime()+Math.max(0,per-1)*30.44*864e5-864e5)):'never';
+  $('t4').textContent=isFinite(per)?when:'Never at this rate';
+  g=`Remaining ${f(rem)} (${Math.min(100,curSav()/num(S.goal)*100||0).toFixed(1)}% done). Real past saving per period (net minus spending): <b class="${futureSave<0?'bad':'ok'}">${f(futureSave)}</b> from ${H.n} completed period(s).<br>
+  This period counts your target ${f(sv)}; later periods use ${H.n?'your real average':'the same target (no history yet)'}.<br>
+  <b>${isFinite(per)?per.toFixed(1)+' pay periods, around '+when:'Never at this rate'}</b>`;
+  if(isFinite(per)){const tgt=Math.max(1,per+num(S.sh));
+   if(tgt>1){const need=(rem-sv)/(tgt-1),ch=need-futureSave;g+=`<br>To finish in ${tgt.toFixed(1)} periods: save <b>${f(need)}</b> per period (<span class="${ch>0?'bad':'ok'}">${ch>0?f(ch)+' less spending':f(-ch)+' more spending allowed'}</span>), about ${f((N.n-need)/30.44)} per day.`}}}
+ $('gl').innerHTML=g;$('cs').textContent=f(curSav());
+ $('at').innerHTML=S.ad.map((a,i)=>`<tr><td>${a.d}</td><td>${esc(a.n)}</td><td class="r ${a.a<0?'bad':'ok'}">${f(a.a)}</td><td><button class=x onclick="S.ad.splice(${i},1);upd()">x</button></td></tr>`).join('');
+ // forecast: fixed categories count as logged, variable ones are scaled to a full period
+ const cat={};let tot2=0,note;
+ if(H.n){H.ks.forEach(k=>{for(const c in H.m[k].c)cat[c]=(cat[c]||0)+H.m[k].c[c]});for(const c in cat)cat[c]/=H.n;note='Average of '+H.n+' completed pay period(s).'}
+ else{const cp=periods()[B.kS];const el=Math.max(1,Math.round((B.now-B.st)/864e5)+1);
+  if(cp)for(const c in cp.c)cat[c]=isFixed(c)?cp.c[c]:cp.c[c]/el*B.n;note='No completed period yet: fixed bills as logged, other categories scaled from the '+el+' day(s) so far.'}
+ const fr=Object.entries(cat).sort((a,b)=>b[1]-a[1]);fr.forEach(x=>tot2+=x[1]);
+ let t='<table><tr><th>Category</th><th class=r>Per period</th><th class=r>Next 6 periods</th></tr>'+fr.map(([c,v])=>`<tr><td>${esc(c)}${isFixed(c)?' (fixed)':''}</td><td class=r>${f(v)}</td><td class=r>${f(v*6)}</td></tr>`).join('')+
+ `<tr><th>Total</th><th class=r>${f(tot2)}</th><th class=r>${f(tot2*6)}</th></tr></table><table style="margin-top:10px"><tr><th>Pay period from</th><th class=r>Saving</th><th class=r>Savings balance</th></tr>`;
+ let bal=curSav(),s0=B.st;for(let i=0;i<6;i++){const sa=i===0?sv:futureSave;bal+=sa;t+=`<tr><td>${fdate(s0)}</td><td class=r>${f(sa)}</td><td class=r>${f(bal)}</td></tr>`;s0=pNext(s0)}
+ $('fc').innerHTML=t+`</table><div class=mu>${note}</div>`;chart1(N,B);chart2(N,B)}
+
+let gy=new Date().getFullYear();
+const sgn=v=>(v>=0?'+':'-')+Math.abs(v).toFixed(2);
+function chart1(N,B){const el=$('g1');
+ if(!S.ex.length){el.innerHTML='<div class=mu>Log some expenses to see this graph.</div>';return}
+ let start=pdt(S.ex.map(e=>e.d).sort()[0]),lo=null;const r=$('gr').value;
+ if(r==='cur')lo=B.st;else if(r==='3'){lo=B.st;for(let i=0;i<2;i++)lo=pStart(new Date(lo.getTime()-864e5))}
+ if(lo&&lo>start)start=lo;
+ const refs={},days=[];let cum=0;
+ for(let d=new Date(start);d<=B.now;d=new Date(d.getFullYear(),d.getMonth(),d.getDate()+1)){
+  const st=pStart(d),sk=iso(st);
+  if(!(sk in refs)){const en=iso(pNext(st)),n=Math.round((pNext(st)-st)/864e5);let fx=0;S.ex.forEach(e=>{if(e.d>=sk&&e.d<en&&isFixed(e.c))fx+=e.a});refs[sk]=(N.n-num(S.st)-fx)/n}
+  const k=iso(d);let v=0;S.ex.forEach(e=>{if(e.d===k&&!isFixed(e.c))v+=e.a});
+  const dl=refs[sk]-v,part=k===B.tk;if(!part)cum+=dl;days.push({k,dl,cum,part})}
+ if(!days.length){el.innerHTML='<div class=mu>Nothing to show yet: the graph starts the day after your first logged expense.</div>';return}
+ const W=700,H=210,pl=48,pr=8,pt=10,pb=22,vals=days.flatMap(x=>[x.dl,x.cum]).concat(0);
+ let mn=Math.min(...vals),mx=Math.max(...vals);const pad=(mx-mn||1)*.08;mn-=pad;mx+=pad;
+ const y=v=>pt+(mx-v)/(mx-mn)*(H-pt-pb),sx=(W-pl-pr)/days.length,x=i=>pl+sx*(i+.5),bw=Math.max(1,sx*.7);
+ let s=`<line x1="${pl}" x2="${W-pr}" y1="${y(0)}" y2="${y(0)}" style="stroke:var(--mu)"/>`;
+ days.forEach((d,i)=>{s+=`<rect x="${x(i)-bw/2}" y="${Math.min(y(0),y(d.dl))}" width="${bw}" height="${Math.abs(y(d.dl)-y(0))}" style="${d.part?'fill:none;stroke-dasharray:3 2;stroke:var(--mu)':'opacity:.55;fill:var('+(d.dl>=0?'--ok':'--bad')+')'}"><title>${d.k}: ${sgn(d.dl)}</title></rect>`});
+ s+=`<polyline fill="none" style="stroke:var(--ac);stroke-width:2" points="${days.map((d,i)=>x(i)+','+y(d.cum)).join(' ')}"/>`;
+ s+=[mx-pad,0,mn+pad].map(v=>`<text x="${pl-4}" y="${y(v)+4}" text-anchor="end" font-size="10" style="fill:var(--mu)">${v.toFixed(0)}</text>`).join('')+
+ `<text x="${pl}" y="${H-6}" font-size="10" style="fill:var(--mu)">${days[0].k}</text><text x="${W-pr}" y="${H-6}" text-anchor="end" font-size="10" style="fill:var(--mu)">${days[days.length-1].k}</text>`;
+ const done=days.filter(d=>!d.part),last7=done.slice(-7),avg=last7.length?last7.reduce((a,d)=>a+d.dl,0)/last7.length:0,yd=done[done.length-1];
+ el.innerHTML=`<div class=mu>Bars: each day, allowance minus what you spent (green = under, red = over). Line: running total, so it rises while you spend less than planned. Allowance used = (net salary - saving target - fixed bills) / days in the period. Fixed bills are not counted as daily spending. The dashed bar is today, not added to the total until the day is over.</div>
+ <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${s}</svg>
+ <div>${yd?`Yesterday <b class="${yd.dl>=0?'ok':'bad'}">${sgn(yd.dl)}</b> &nbsp; Last ${last7.length} day(s) average <b class="${avg>=0?'ok':'bad'}">${sgn(avg)}</b> per day &nbsp; `:'<span class=mu>No finished day yet, the dashed bar is today so far. </span>'}Running total <b class="${cum>=0?'ok':'bad'}">${sgn(cum)}</b> EUR</div>`}
+function chart2(N,B){const el=$('g2'),yr=$('gm').value==='y',lim=N.n-num(S.st);$('gyc').style.display=yr?'':'none';$('gyl').textContent=gy;
+ const W=700,H=210,pl=48,pr=8,pt=12,pb=22,t=(x,yv,txt,a)=>`<text x="${x}" y="${yv}" text-anchor="${a||'end'}" font-size="10" style="fill:var(--mu)">${txt}</text>`;
+ let s='',head='';
+ if(!yr){const n=B.n,ti=n-B.left,daily=Array(n).fill(0);S.ex.forEach(e=>{if(e.d>=B.kS&&e.d<B.kE)daily[Math.round((pdt(e.d)-B.st)/864e5)]+=e.a});
+  const pts=[];let c=0;for(let i=0;i<=ti;i++){c+=daily[i];pts.push(c)}const spent=c,ym=Math.max(lim,spent,1)*1.1;
+  const x=i=>pl+i/(n-1)*(W-pl-pr),y=v=>pt+(ym-v)/ym*(H-pt-pb),over=spent>lim;
+  s=`<line x1="${x(0)}" y1="${y(0)}" x2="${x(n-1)}" y2="${y(lim)}" style="stroke:var(--mu);stroke-dasharray:3 4"/>
+  <line x1="${pl}" x2="${W-pr}" y1="${y(lim)}" y2="${y(lim)}" style="stroke:var(--bad);stroke-dasharray:6 3"/>
+  <polyline fill="none" style="stroke:var(${over?'--bad':'--ac'});stroke-width:2.5" points="${pts.map((v,i)=>x(i)+','+y(v)).join(' ')}"/>`+
+  t(pl-4,y(lim)+4,lim.toFixed(0))+t(pl-4,y(0)+4,'0')+t(pl,H-6,fdate(B.st),'start')+t(W-pr,H-6,fdate(new Date(B.end.getTime()-864e5)))+t(W-pr,y(lim)-4,'limit '+lim.toFixed(0));
+  head=lim>0?`Spent <b>${f(spent)}</b> of <b>${f(lim)}</b> (${(spent/lim*100).toFixed(0)}%). `+(over?`<b class=bad>In the red by ${f(spent-lim)}</b>`:`<b class=ok>${f(lim-spent)} left</b>`):'Set your gross income first.';
+  head+=`<div class=mu>Solid line = cumulative spending including fixed bills. Dotted diagonal = even pace to the limit. Limit = net salary minus saving target.</div>`}
+ else{const m=Array(12).fill(0),P=periods();for(const k in P)if(+k.slice(0,4)===gy)m[+k.slice(5,7)-1]+=P[k].t;
+  const ym=Math.max(lim,...m,1)*1.1,y=v=>pt+(ym-v)/ym*(H-pt-pb),sx=(W-pl-pr)/12,bw=sx*.6,mon=['J','F','M','A','M','J','J','A','S','O','N','D'];
+  m.forEach((v,i)=>{s+=`<rect x="${pl+sx*i+(sx-bw)/2}" y="${y(v)}" width="${bw}" height="${y(0)-y(v)}" style="fill:var(${v>lim?'--bad':'--ac'});opacity:.8"><title>${f(v)}</title></rect>`+t(pl+sx*(i+.5),H-6,mon[i],'middle')+(v?t(pl+sx*(i+.5),y(v)-3,v.toFixed(0),'middle'):'')});
+  s+=`<line x1="${pl}" x2="${W-pr}" y1="${y(lim)}" y2="${y(lim)}" style="stroke:var(--bad);stroke-dasharray:6 3"/>`+t(pl-4,y(lim)+4,lim.toFixed(0))+t(pl-4,y(0)+4,'0');
+  const tot=m.reduce((a,b)=>a+b,0),cnt=m.filter(v=>v>0).length,red=m.filter(v=>v>lim).length;
+  head=`${gy}: spent <b>${f(tot)}</b> over ${cnt} month(s) with data, monthly limit ${f(lim)}. `+(red?`<b class=bad>${red} month(s) in the red</b>`:'<b class=ok>No month over the limit</b>')+
+  `<div class=mu>Each bar is one pay period, placed in the month it starts. Red bar = over the limit.</div>`}
+ el.innerHTML=head+`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${s}</svg>`}
+
+let CSV=null;
+function guessCat(d){d=d.toLowerCase();for(const ln of S.rules.split('\n')){const i=ln.lastIndexOf('=');if(i<0)continue;const c=ln.slice(i+1).trim();
+  if(c&&ln.slice(0,i).split(',').some(k=>k.trim()&&d.includes(k.trim().toLowerCase()))){if(!S.cats.includes(c))S.cats.push(c);return c}}return'Extras'}
+function pDate(s){s=String(s).trim();let m=s.match(/(\d{4})-(\d{2})-(\d{2})/);if(m)return m[1]+'-'+m[2]+'-'+m[3];
+ m=s.match(/(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/);return m?m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0'):null}
+function pNum(s){s=String(s).replace(/\s|\u00a0|EUR/g,'');if(s.includes(',')&&s.includes('.'))s=s.replace(/\./g,'');return parseFloat(s.replace(',','.'))}
+function parseCSV(t){const l1=t.split('\n')[0],del=[';','\t',','].sort((a,b)=>l1.split(b).length-l1.split(a).length)[0],rows=[];let r=[],c='',q=false;
+ for(let i=0;i<t.length;i++){const ch=t[i];if(q){if(ch=='"'){if(t[i+1]=='"'){c+='"';i++}else q=false}else c+=ch}
+  else if(ch=='"')q=true;else if(ch==del){r.push(c);c=''}else if(ch=='\n'||ch=='\r'){if(ch=='\r'&&t[i+1]=='\n')i++;r.push(c);c='';if(r.some(x=>x.trim()))rows.push(r);r=[]}else c+=ch}
+ r.push(c);if(r.some(x=>x.trim()))rows.push(r);return rows}
+$('cf').onchange=e=>{const fr=new FileReader();fr.onload=()=>{const rows=parseCSV(fr.result),hi=Math.max(0,rows.findIndex(r=>r.length>=3&&r.some(x=>/dat|summ|amount/i.test(x))));
+ CSV={h:rows[hi],rows:rows.slice(hi+1)};const opt=(re,def)=>{const i=CSV.h.findIndex(x=>re.test(x));return i<0?def:i};
+ const sels={c1:opt(/datum|date/i,0),c2:opt(/summa|amount|sum/i,1),c3:opt(/detal|descr|piezīm|paskaidr|merchant|saņēm|benef|counterparty|nosaukum|details/i,2),c4:opt(/^d\/?k$|debit.?credit|^dk$/i,-1)};
+ for(const id in sels){$(id).innerHTML=(id==='c4'?'<option value="-1">none (use minus sign)</option>':'')+CSV.h.map((x,i)=>`<option value="${i}">${esc(x)}</option>`).join('');$(id).value=sels[id]}
+ $('cmap').style.display='';$('bst').textContent=CSV.rows.length+' rows read. Check the columns, then press Import.'};fr.readAsText(e.target.files[0],'utf-8')};
+function impCSV(){if(!CSV)return;const a=+$('c1').value,b=+$('c2').value,c=+$('c3').value,k=+$('c4').value,seen={},list=[];
+ CSV.rows.forEach(r=>{const d=pDate(r[a]||''),v=pNum(r[b]||'');if(!d||isNaN(v))return;let sp=v;
+  if(k>=0){const x=(r[k]||'').trim().toUpperCase();sp=x.startsWith('D')?-Math.abs(v):x.startsWith('K')||x.startsWith('C')?Math.abs(v):v}
+  if(sp>=0)return;const n=(r[c]||'').trim(),key='csv|'+d+'|'+sp+'|'+n;seen[key]=(seen[key]||0)+1;list.push({bid:key+'|'+seen[key],d,a:-sp,n})});
+ const added=addTx(list);$('bst').textContent='Imported '+added+' new expense(s), skipped '+(list.length-added)+' already present.';upd()}
+function addTx(list){const have=new Set(S.ex.map(e=>e.bid).filter(Boolean));let n=0;
+ list.forEach(t=>{if(have.has(t.bid))return;have.add(t.bid);S.ex.push({id:Date.now()+Math.random(),bid:t.bid,d:t.d,a:Math.round(t.a*100)/100,c:guessCat(t.n),n:t.n});n++});return n}
+
+const EBK='budgetTracker.eb',EBAPI='https://api.enablebanking.com',ebf={eba:'app',ebr:'redir',ebk:'pem'};
+function ebGet(){try{return JSON.parse(localStorage.getItem(EBK))||{}}catch(e){return{}}}
+function ebPut(o){localStorage.setItem(EBK,JSON.stringify(o))}
+function ebInit(){const e=ebGet();for(const id in ebf){$(id).value=e[ebf[id]]||'';$(id).addEventListener('input',()=>{const x=ebGet();x[ebf[id]]=$(id).value.trim();ebPut(x)})}ebStatus()}
+function ebStatus(){const e=ebGet(),el=$('ebs');
+ if(e.acc&&e.acc.length){const left=Math.ceil((e.exp-Date.now())/864e5);
+  el.innerHTML=left>0?'Connected ('+e.acc.length+' account(s)). Access expires '+fdate(new Date(e.exp))+' ('+left+' days left).':'<span class="bad">Bank access expired. Redo steps 1 and 2.</span>'}
+ else el.textContent='Not connected.'}
+function b64u(x){const b=typeof x==='string'?new TextEncoder().encode(x):new Uint8Array(x);let s='';b.forEach(c=>s+=String.fromCharCode(c));return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
+let ebJwt='',ebJwtAt=0,ebJwtSrc='';
+async function ebToken(){const e=ebGet();if(!e.app||!e.pem)throw new Error('Enter the Application ID and private key first');
+ if(ebJwt&&ebJwtSrc===e.app+e.pem&&Date.now()-ebJwtAt<30*6e4)return ebJwt;
+ if(!window.crypto||!crypto.subtle)throw new Error('Signing is not available in this WebView');
+ const m=e.pem.match(/-----BEGIN PRIVATE KEY-----([\s\S]+?)-----END PRIVATE KEY-----/);
+ if(!m)throw new Error('Key must be a "BEGIN PRIVATE KEY" file. First line of yours: '+e.pem.split('\n')[0].slice(0,40));
+ const der=Uint8Array.from(atob(m[1].replace(/\s/g,'')),c=>c.charCodeAt(0));let k;
+ try{k=await crypto.subtle.importKey('pkcs8',der,{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'},false,['sign'])}catch(x){throw new Error('Key not readable: '+x.message)}
+ const now=Math.floor(Date.now()/1000),h=b64u(JSON.stringify({typ:'JWT',alg:'RS256',kid:e.app})),p=b64u(JSON.stringify({iss:'enablebanking.com',aud:'api.enablebanking.com',iat:now,exp:now+3600}));
+ const sig=await crypto.subtle.sign('RSASSA-PKCS1-v1_5',k,new TextEncoder().encode(h+'.'+p));
+ ebJwt=h+'.'+p+'.'+b64u(sig);ebJwtAt=Date.now();ebJwtSrc=e.app+e.pem;return ebJwt}
+async function ebCall(path,opt){const t=await ebToken(),o=opt||{};
+ const r=await fetch(EBAPI+path,{method:o.method||'GET',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:o.body});
+ let j={};try{j=await r.json()}catch(x){}
+ if(r.status>=400)throw new Error(path.split('?')[0]+' '+r.status+' '+(j.message||j.error||j.detail||''));return j}
+async function ebConnect(){const el=$('bst');
+ try{const e=ebGet();if(!e.redir)throw new Error('Enter the redirect URL first');el.textContent='Preparing...';
+  const L=await ebCall('/aspsps?country=LV'),list=Array.isArray(L)?L:(L.aspsps||[]),seb=list.filter(a=>/^SEB\b/i.test(a.name||'')),a=seb.find(x=>/^SEB$/i.test(x.name))||seb[0];
+  if(!a)throw new Error('SEB was not found in the bank list');
+  const mx=a.maximum_consent_validity?a.maximum_consent_validity*1000:90*864e5,until=new Date(Date.now()+Math.min(90*864e5,mx)-36e5),
+  st='s'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+  const r=await ebCall('/auth',{method:'POST',body:JSON.stringify({access:{valid_until:until.toISOString().replace(/\.\d+Z$/,'Z')},aspsp:{name:a.name,country:a.country||'LV'},state:st,redirect_url:e.redir,psu_type:'personal'})});
+  if(!r.url)throw new Error('No approval link returned');
+  e.pend={st,until:until.getTime()};ebPut(e);
+  el.innerHTML='Approve in SEB with Smart-ID. <a href="'+esc(r.url)+'" target="_blank">Open approval page</a>. You will land on your redirect page (it may look blank or broken). Copy its full web address, paste it into step 2 and press Finish.';
+  window.open(r.url,'_blank')}
+ catch(e){el.textContent='Connect failed: '+e.message}}
+async function ebFinish(){const el=$('bst');
+ try{const e=ebGet();if(!e.pend)throw new Error('Press 1. Connect SEB first');
+  const txt=$('ebu').value.trim();let code=null,state=null,err=null;
+  try{const u=new URL(txt);code=u.searchParams.get('code');state=u.searchParams.get('state');err=u.searchParams.get('error_description')||u.searchParams.get('error')}catch(x){code=txt}
+  if(err)throw new Error('Bank said: '+err);if(!code)throw new Error('No code found in that address');
+  if(state&&state!==e.pend.st)throw new Error('That address is from an older attempt. Press 1 again and use the new approval.');
+  el.textContent='Finishing...';
+  const r=await ebCall('/sessions',{method:'POST',body:JSON.stringify({code})});
+  const acc=(r.accounts||[]).map(a=>typeof a==='string'?a:a.uid).filter(Boolean);
+  if(!acc.length)throw new Error('No accounts came back. Tick your accounts when approving.');
+  e.sid=r.session_id;e.acc=acc;e.exp=r.access&&r.access.valid_until?Date.parse(r.access.valid_until):e.pend.until;delete e.pend;ebPut(e);
+  $('ebu').value='';ebStatus();await syncNow(true)}
+ catch(e){el.textContent='Finish failed: '+e.message}}
+async function syncNow(manual){const el=$('bst');
+ if(!manual&&Date.now()-num(S.ls)<6*36e5)return;
+ try{const e=ebGet();if(!e.acc||!e.acc.length){if(manual)el.textContent='Not connected yet. Use 1. Connect SEB first.';return}
+  if(e.exp&&Date.now()>e.exp)throw new Error('Bank access expired. Redo steps 1 and 2.');
+  el.textContent='Syncing...';const from=iso(new Date(Date.now()-60*864e5)),list=[],seen={};
+  for(const uid of e.acc){let ck='',guard=0;
+   do{const j=await ebCall('/accounts/'+encodeURIComponent(uid)+'/transactions?date_from='+from+(ck?'&continuation_key='+encodeURIComponent(ck):''));
+    (j.transactions||[]).forEach(x=>{if(x.status&&x.status!=='BOOK')return;
+     const am=x.transaction_amount||{},v=parseFloat(am.amount),out=x.credit_debit_indicator?x.credit_debit_indicator==='DBIT':v<0,a=Math.abs(v);
+     if(!out||!(a>0))return;const d=pDate(x.booking_date||x.value_date||x.transaction_date||'');if(!d)return;
+     const n=[x.creditor&&x.creditor.name,[].concat(x.remittance_information||[]).join(' '),x.note].filter(Boolean).join(' '),id=x.entry_reference||x.transaction_id;
+     let bid;if(id)bid='eb|'+uid.slice(0,8)+'|'+id;else{const k='eb|'+d+'|'+a+'|'+n;seen[k]=(seen[k]||0)+1;bid=k+'|'+seen[k]}
+     list.push({bid,d,a,n})});
+    ck=j.continuation_key||'';guard++}while(ck&&guard<30)}
+  const n=addTx(list);S.ls=Date.now();el.textContent='Synced '+new Date().toLocaleTimeString()+': '+n+' new expense(s).';upd();ebStatus()}
+ catch(e){el.textContent='Sync failed: '+e.message}}
+let syncT=null;function armSync(){clearInterval(syncT);if(S.ba)syncT=setInterval(()=>syncNow(false),Math.max(360,num(S.bi))*60000)}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&S.ba)syncNow(false)});
+function upd(){save();render()}
+function pick(k){sel=k;$('ed').value=k;render()}
+function mv(n){vm.setMonth(vm.getMonth()+n);render()}
+function tf(i){const c=S.cats[i],j=S.fixed.indexOf(c);j<0?S.fixed.push(c):S.fixed.splice(j,1);upd()}
+function addE(){const a=num($('ea').value),d=$('ed').value;if(!a||!d)return;S.ex.push({id:Date.now()+Math.random(),d,a,c:$('ec').value,n:$('en').value});sel=d;$('ea').value='';$('en').value='';upd()}
+function delE(id){S.ex=S.ex.filter(e=>e.id!==id);upd()}
+function addC(){const c=$('nc').value.trim();if(c&&!S.cats.includes(c))S.cats.push(c);$('nc').value='';upd()}
+function adj(s){const a=num($('aa').value);if(!a)return;S.ad.push({d:iso(new Date()),a:a*s,n:$('ar').value||(s>0?'Deposit':'Withdrawal')});$('aa').value='';$('ar').value='';upd()}
+function exp(){if(window.Capacitor&&navigator.clipboard){navigator.clipboard.writeText(JSON.stringify(S));alert('Backup copied to clipboard. Paste it into a note or message to keep it.');return}const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,1)],{type:'application/json'}));a.download='budget-backup-'+iso(new Date())+'.json';a.click()}
+$('imp').onchange=e=>{const r=new FileReader();r.onload=()=>{try{S=Object.assign(JSON.parse(JSON.stringify(D)),JSON.parse(r.result));init();upd()}catch(x){alert('Invalid file')}};r.readAsText(e.target.files[0])};
+const fm=['gross','vsaoi','nm','pd','goal','sv','st','dg','sh','bi','rules'];
+function init(){S.bi=Math.max(360,num(S.bi)||360);fm.forEach(id=>$(id).value=S[id]);
+ $('br').innerHTML='<tr><th></th><th>From</th><th>Up to</th><th>Rate %</th></tr>'+S.br.map((b,i)=>`<tr><td>${i+1}</td><td id=bf${i}></td><td><input type=number step=any value="${b.up}" placeholder="no cap" oninput="S.br[${i}].up=this.value;upd()"></td><td><input type=number step=any value="${b.r}" placeholder="unused" oninput="S.br[${i}].r=this.value;upd()"></td></tr>`).join('');
+ $('d1').open=!num(S.gross);$('ba').checked=!!S.ba}
+fm.forEach(id=>$(id).addEventListener('input',e=>{S[id]=e.target.value;upd();armSync()}));
+$('ba').addEventListener('change',e=>{S.ba=e.target.checked;upd();armSync()});
+init();ebInit();$('ed').value=sel;render();save();armSync();if(S.ba)syncNow(false);
+setInterval(save,300000);window.addEventListener('beforeunload',save);
+if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
+</script></body></html>
